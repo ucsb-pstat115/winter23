@@ -81,7 +81,7 @@ Make a bar plot where the heights are the counts of the word _fire_ and the x-ax
 
 
 ## 1d.
-Plot the log-likelihood of the Poisson rate of _fire_ usage in R using the data in `fire_counts`.  Then use `fire_counts` to compute the maximum likelihood estimate of the rate of the usage of the word _fire_ in The Deathly Hallows.  Mark this maximum on the log-likelihood plot with a vertical line (use `abline` if you make the plot in base R or `geom_vline` if you prefer `ggplot`).  
+Plot the log-likelihood of the Poisson rate of _fire_ usage in R using the data in `fire_counts`.  Then use `fire_counts` to compute the maximum likelihood estimate of the rate of the usage of the word _fire_ in The Goblet of Fire.  Mark this maximum on the log-likelihood plot with a vertical line (use `abline` if you make the plot in base R or `geom_vline` if you prefer `ggplot`).  
 
 ```{r}
 # YOUR CODE HERE

@@ -1,0 +1,120 @@
+---
+title: "Lab2"
+author: "PSTAT 115, Winter 2022"
+date: "Jan 11, 2022"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+urlcolor: blue
+header-includes:
+ \usepackage{float}
+---
+
+#Step Up.
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(echo=TRUE, 
+                      cache=FALSE, 
+                      fig.width=5, 
+                      fig.height=5,
+                      fig.align='center',
+                      fig.pos = 'H')
+library(tidyverse)
+library(ggplot2)
+```
+
+#Useful Peliminaries (Functions) for this Lab. 
+```{r}
+#1) %>% : 
+#1a) :
+#2) ggplot(): 
+```
+
+
+
+#2) Data Generating Process. 
+
+** Main Question: How to model chickweight when given information regarding 1. time 2. chicken id 3. diet? 
+  
+** Let's begin with the code. 
+
+1. Dataset
+```{r}
+
+```
+
+2. Exploring our Data 
+
+2a. Investigating chicken weights. 
+```{r}
+
+```
+
+
+2b. Investigating chicken weights while fixing other covariates. 
+
+Distribution of weight given a fixed time: p(weight|Time = t)
+```{r}
+df %>% filter(Time == 16) %>% ggplot(aes(weight))+ geom_histogram()
+```
+
+
+Q1: plot chick weights under the next requirements.
+  - As a function of time vs weight. (using geom_point)
+  - Shade the data points wrt to Diet. 
+```{r}
+#Answer 
+
+```
+  
+
+
+
+3. Generate obersavetions (y_1, ..., y_n) from our model. Here, Y_i = Chick Weight (random variable).
+
+** Assumptions: 
+
+  1. Weights are normally distributed.
+  
+  * 
+
+  2. Effect of Covariates. 
+  
+  *  
+  
+  * As diet changes, the rate of increase (alpha) changes.
+  
+  Final Model:
+  
+  *Note: diet is categorical (ranges between 1-4). Assume 
+  p = (4,.2,.2,.2) (distrbution of each diet category)
+```{r}
+p = c(4,.2,.2,.2)
+for(i in 1:nrow(ChickWeight)){
+  Draw diet_i from Categorical(4,p) #sampling a random diet variable accordingly (dis. p) 
+  Set alpha_i = alpha_k if diet_i = k, k = 1,2,3,4
+  Draw weight_i from Normal(alpha_i * t_i + beta, sigma) 
+  
+}
+```
+
+#3) Baysian Example 
+
+1. Main Question: assume a user searched the word radom. 
+
+2. Equations: See board. 
+
+3. Code:
+```{r}
+likelihood = c(0.00193, 0.000143, 0.975)
+prior = c(7.60e-5, 6.05e-6, 3.12e-7)
+
+unnormalized_posterior = likelihood * prior
+posterior = unnormalized_posterior / sum(unnormalized_posterior)
+posterior
+```
+
+
+
+

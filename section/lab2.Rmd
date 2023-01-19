@@ -1,7 +1,7 @@
 ---
 title: "Lab2"
-author: "PSTAT 115, Winter 2022"
-date: "Jan 11, 2022"
+author: "PSTAT 115, Winter 2023"
+date: "Jan 19, 2023"
 output:
   pdf_document: default
   html_document:

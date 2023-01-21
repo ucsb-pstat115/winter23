@@ -1,0 +1,124 @@
+---
+title: "Lab2"
+author: "PSTAT 115, Winter 2022"
+date: "Jan 11, 2022"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+urlcolor: blue
+header-includes:
+ \usepackage{float}
+---
+
+#Step Up.
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(echo=TRUE, 
+                      cache=FALSE, 
+                      fig.width=5, 
+                      fig.height=5,
+                      fig.align='center',
+                      fig.pos = 'H')
+library(tidyverse)
+library(ggplot2)
+```
+
+#Useful Peliminaries (Functions) for this Lab. 
+```{r}
+#1) %>% : used to connect a sequence of operations
+#1a) filter: allows you to subset a dataframe under fixed conditions.
+#2) ggplot(aes(axes)) + (whichever type of plot you generate) exs: geom_line, geom_histogram, geom_point etc 
+```
+
+
+
+#2) Data Generating Process. 
+
+** Main Question: How to model chickweight when given information regarding 1. time 2. chicken id 3. diet? 
+  
+** Let's begin with the code. 
+
+1. Dataset
+```{r}
+df = ChickWeight %>% as_tibble()
+df
+```
+
+2. Exploring our Data 
+
+2a. Investigating chicken weights. 
+```{r}
+df %>% ggplot(aes(weight)) + geom_histogram()
+```
+T/F: very few (comparibly) weights are greater than 300? T
+T/F: the chick weight with the highest count is between 0 & 100? T
+
+2b. Investigating chicken weights while fixing other covariates. 
+
+Distribution of weight given a fixed time: p(weight|Time = t)
+```{r}
+df %>% filter(Time == 16) %>% ggplot(aes(weight))+ geom_histogram()
+```
+T/F: the chick weight with the highest count given time = 16 is between 0 & 100? F
+
+Q1: plot chick weights under the next requirements.
+  - As a function of time vs weight. (using geom_point)
+  - Shade the data points wrt to Diet. 
+```{r}
+#Answer 
+df %>% ggplot(aes(Time, weight)) + geom_point(aes(color=Diet))
+
+#Cooler visualization
+df %>% ggplot(aes(Time, weight)) + geom_point(aes(color=Diet)) + facet_wrap(~ Diet, nrow = 2, labeller = label_both)
+```
+  
+
+
+
+3. Generate obersavetions (y_1, ..., y_n) from our model. Here, Y_i = Chick Weight (random variable).
+
+** Assumptions: 
+
+  1. Weights are normally distributed.
+  
+  * Unknown Parameters? mean (mu) and variance (sigma^2).
+
+  2. Effect of Covariates. 
+  
+  *As time increases, the weight of the chicken must increase     also (on average). 
+  
+  How to incorportate this knowledge? Say 
+  
+  * As diet changes, the rate of increase (alpha) changes.
+  
+  Final Model: 
+  
+  *Note: diet is categorical (ranges between 1-4). Assume 
+  p = (4,.2,.2,.2) (distrbution of each diet category)
+```{r pseudocode, eval = FALSE}
+p = c(4,.2,.2,.2)
+for(i in 1:nrow(ChickWeight)){
+  Draw diet_i from Categorical(4,p) #sampling a random diet variable accordingly (dis. p) 
+  Set alpha_i = alpha_k if diet_i = k, k = 1,2,3,4
+  Draw weight_i from Normal(alpha_i * t_i + beta, sigma) 
+  
+}
+```
+
+#3) Baysian Example 
+
+1. Main Question: assume a user searched the word radom. What's the `probability that they meant to search (typed) another word? other words: (random, radon)
+
+2. Equations: See board. 
+
+3. Code:
+```{r}
+likelihood = c(0.00193, 0.000143, 0.975)
+prior = c(7.60e-5, 6.05e-6, 3.12e-7)
+
+unnormalized_posterior = likelihood * prior
+posterior = unnormalized_posterior / sum(unnormalized_posterior)
+posterior
+```
+

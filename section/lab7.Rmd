@@ -1,0 +1,74 @@
+---
+title: "lab7"
+output: pdf_document
+date: "2023-02-23"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Modelling with Stan 
+
+\begin{itemize}
+\item Stan is its own language used in r, python etc and need a C++ compiler. 
+\item We input our model and it calculates the log posterior density and generates samples from it.
+\item It can be confusing to learn at first and you will frequently encounter errors and bugs so don't worry too much.
+\end{itemize}
+
+A stan file needs 3 things:
+\begin{enumerate}
+\item Data: sample data and its size
+\item Parameters: What we wish to sample
+\item Model: Our likelihood and priors
+\end{enumerate}
+
+We need to specify data types such as integers or real numbers and we are also able to impose bounds using "<lower=0>". Its also important to remember to end lines of code with a semi-colon ;. We use the "check" button on our Stan file and want it to return "file.stan is syntactically correct." otherwise we have a problem in our code.
+
+## Example: Fly Wing Length
+We wish to generate samples of the length of a species of fly's wings. We are given that 
+$$y_i \sim N(\mu, \sigma^2)$$ and we assume the following priors on $\mu$ and $\sigma$ based on a previous study where we find that the average wing length is 1.9mm:
+$$\sigma \sim Cauchy(0,1) \textrm{ and } \mu \sim N(\mu_0, \frac{\sigma^2}{\kappa_0})=N(1.9, \frac{\sigma^2}{1})$$. 
+We have the following data 
+```{r}
+y = c(1.64, 1.7, 1.72, 1.74, 1.82, 1.82, 1.9, 2.08)
+n = length(y)
+```
+Now, we want to sample values of $\mu$ and $\sigma^2$:
+```{r pressure, echo=FALSE}
+# install.packages("cmdstanr", repos = c("https://mc-stan.org/r-packages/", getOption("repos")))
+# install_cmdstan()
+library(cmdstanr)
+library(bayesplot)
+```
+
+```{r}
+stan_model <- cmdstan_model("example_stan.stan")
+
+stan_fit <-
+  stan_model$sample(
+    data = list(N = n, y = y, k0=1),
+    refresh = 0, show_messages=FALSE)
+```
+We can inspect our model output in a number of ways. The first is Posterior summary statistics:
+```{r}
+stan_fit$summary()
+```
+We will also want to extract draws from our posterior:
+```{r}
+draws_df <- stan_fit$draws(format = "df")
+print(draws_df)
+```
+We can plot these draws as follows:
+```{r}
+mcmc_hist(stan_fit$draws("mu"))
+mcmc_hist(stan_fit$draws("sigma"))
+```
+
+
+
+
+
+
+
+

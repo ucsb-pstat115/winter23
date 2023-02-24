@@ -1,0 +1,124 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+#1) Modelling with Stan; Overview 
+
+\begin{itemize}
+\item Stan is its own language used in r, python etc and need a C++ compiler. 
+\item We input our model and it calculates the log posterior density and generates samples from it.
+\item It can be confusing to learn at first and you will frequently encounter errors and bugs so don't worry too much.
+\end{itemize}
+
+A stan file needs 3 things:
+\begin{enumerate}
+\item Data: 1)                2)
+\item Parameters: 
+\item Model: set distribution of both the 1) likelihood 2) priors 
+\end{enumerate}
+
+Notation: 
+1) When defining a new paramter/input variable specify the type real/integer 
+2) lower bounds on the values: 
+3) end each line with: 
+
+#2) Example 1. Fly Wing Length.
+
+Goal: 
+
+Given: 
+1) Distribution of $y_i \sim N(\mu,\sigma^2)$
+2) Prior on $\mu$: $\sim N(1.9, \frac{\sigma^2}{\kappa_0})$
+3) Prior on $\sigma^2$: 
+
+#2a) Create stan file & name it ``example_stan.stan''
+
+#2b) 
+
+We have the next data (obs):
+```{r}
+y = c(1.64, 1.7, 1.72, 1.74, 1.82, 1.82, 1.9, 2.08)
+n = length(y)
+```
+
+define model from package 
+```{r}
+#install.packages("cmdstanr", repos = c("https://mc-stan.org/r-packages/", getOption("repos")))
+#install_cmdstan()
+library(cmdstanr)
+library(bayesplot)
+
+#model 
+stan_model <- cmdstan_model("example_stan.stan")
+
+#extract samples 
+stan_fit <-
+  stan_model$sample(
+    data = list(N = n, y = y, k0=1),
+    refresh = 0, show_messages=FALSE)
+```
+
+Posterior summary 
+```{r}
+stan_fit$summary()
+```
+
+We will also want to extract draws from our posterior:
+```{r}
+draws_df <- stan_fit$draws(format = "df")
+print(draws_df)
+```
+We can plot these draws as follows:
+```{r}
+mcmc_hist(stan_fit$draws("mu"))
+mcmc_hist(stan_fit$draws("sigma"))
+```
+q1: does the distribution of mu seem Normal? mean? 
+
+
+
+#3) Example 2. Group Exercise: (Similar to Q3 HW)
+
+
+#1) Given: 
+-IQ tests  
+-Take sample of n random individuals $y_1, ..., y_n \sim N(\mu,\sigma^2)$. 
+-Joint distribution of $\mu$ & $\sigma$ 
+
+-Let $\mu_0 = 100$  (prior) and $\kappa_0 = 1$. Since assume $E[\sigma] = 15$, suppose $a = 15$ and $b=1$. 
+
+
+#2) Goal: estimate population mean in town.  
+
+##IQ tests observed 
+```{r}
+y = c(70,85,111,111,115,120,125)
+n = length(y)
+```
+
+
+#Step 1): create the appropate stan file and call it IQ_model.stan
+
+#Step 2) extract the samples from stan code 
+
+```{r}
+normal_stan_model = cmdstan_model("IQ_model.stan")
+
+stan_fit = normal_stan_model$sample(data = list(#fill in data values 
+), refresh = 0, show_messages = FALSE)
+
+samples = stan_fit$draws(format = "df")
+```
+
+#Step 3) Make a scatter plot of the posterior distrubtion of the mean mu and the precision 1/sigma^2.
+
+```{r}
+mu_samples =
+sigma_samples = samples$sigma 
+precision_samples =
+
+all_samples = 
+```
+
+

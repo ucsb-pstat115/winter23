@@ -1,0 +1,167 @@
+---
+title: "Lab 8"
+author: "PSTAT 115, Winter 2022"
+date: "February 22nd, 2022"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+urlcolor: blue
+header-includes:
+ \usepackage{float}
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(echo=TRUE, 
+                      cache=FALSE,
+                      message = FALSE,
+                      warning = FALSE,
+                      fig.width=5, 
+                      fig.height=5,
+                      fig.align='center',
+                      fig.pos = 'H')
+library(tidyverse)
+library(ggplot2)
+library(rstan)
+# install.packages("cmdstanr", repos = c("https://mc-stan.org/r-packages/", getOption("repos")))
+library(cmdstanr)
+# install_cmdstan()
+library(rstan)
+library(cmdstanr)
+library(bayesplot)
+```
+
+
+```{r, echo=FALSE}
+# include_graphics('../labs/lab8/stan.JPG')
+```
+
+# Simple linear regression model
+
+The simple linear regression model is: $$y_i=\beta x_i+\alpha+\epsilon_i\ \ \   i=1,\dots,n$$
+
+$\epsilon_i\sim \text{normal}(0,\sigma^2)$ and $\epsilon_i$'s are independent.
+
+This model can be written as $$y_i-\beta x_i-\alpha \sim \text{normal}(0,\sigma^2)$$ which means $$y_i \sim \text{normal}(\beta x_i+\alpha,\sigma^2)$$. And we will use this last expression of the model to code simple linear regression with stan.
+
+Now the parameters that we have are $\beta,\alpha\ \text{and}\ \sigma$. In frequentist view, we find the likelihood and compute the MLE then mission's complete. But in Bayesian context, we can specify some priors, find the posterior distribution and estimate those parameters with posterior means/medians/modes etc. Of course, the posterior distribution might be complicated and we need to turn to MCMC for help. That's when we would like to use stan to tackle problems.
+
+We code the model in a stan file as follows. Note: in stan, if you don't specify the prior, it will use the improper priors for the unbounded parameters.
+
+```{r, eval=FALSE}
+data {
+  int<lower=0> N;
+  vector[N] x;
+  vector[N] y;
+}
+parameters {
+  real alpha;
+  real beta;
+  real<lower=0> sigma;
+}
+model {
+  y ~ normal(alpha + x*beta, sigma);
+}
+```
+
+
+```{r}
+set.seed(123)
+x <- runif(100, 0,5)
+a <- 2
+b <- 0.5
+y <- b*x+a+rnorm(100, mean = 0, sd = 2)
+n <- length(y)
+ggplot(data = data.frame(x=x,y=y))+geom_point(aes(x=x,y=y))+geom_abline(slope = b, intercept = a, col = "red")+theme_bw()
+
+stan_model2 = cmdstan_model("lab8/simple_linear_regression.stan")
+stan_fit2 =   stan_model2$sample(
+    data = list(N = n, y = y, x=x),
+    refresh = 0, show_messages=FALSE)
+
+samples <- stan_fit2$draws(format = "df")
+samples
+
+alpha_samples <- samples$alpha
+beta_samples <- samples$beta
+sigma_samples <- samples$sigma
+```
+
+
+Now let's look at the estimates of posterior means.
+
+
+```{r}
+mean(beta_samples)
+mean(alpha_samples)
+mean(sigma_samples)
+```
+
+Let's say if we are interested in the predicted value when x=5, that is $\hat{y} = \alpha+5\beta$. Then we can get samples of this predict value. The sample mean will give us a good estimate of the posterior mean of this predict value at $x=5$.
+
+```{r}
+y_hat <- alpha_samples + 5*beta_samples
+mean(y_hat)
+```
+
+We can also explore the posterior relationship between $\alpha$ and $\beta$. 
+
+```{r}
+ggplot(tibble(alpha=alpha_samples, beta=beta_samples)) + geom_point(aes(x=alpha, y=beta)) + theme_bw()
+```
+
+
+## Making 60% and 90% confidence bands plot for y
+
+*Important Code for HW* 
+```{r}
+xgrid <- seq(0, 5, by=0.1)
+
+xgrid
+
+compute_curve <- function(sample) {
+  alpha <- sample[1]
+  beta <- sample[2]
+  y_values <- alpha + beta*xgrid
+}
+
+res <- apply(cbind(alpha_samples, beta_samples), 1, compute_curve)
+#each col of res is for a set of alpha,beta values
+#each row of res is different y values computed from different sets of alpha beta for a fixed x values.
+quantiles <- apply(res, 1, function(x) quantile(x, c(0.05, 0.20, 0.80, 0.95)))
+
+
+posterior_mean <- rowMeans(res)
+#posterior_med <- apply(res, 1, median)
+tibble(x=xgrid,
+q05=quantiles[1, ],
+q20=quantiles[2, ],
+q80=quantiles[3, ],
+q95=quantiles[4, ],
+mean=posterior_mean) %>%
+ggplot() +
+geom_ribbon(aes(x=xgrid, ymin=q05, ymax=q95), alpha=0.2) +
+geom_ribbon(aes(x=xgrid, ymin=q20, ymax=q80), alpha=0.5) +
+geom_line(aes(x=xgrid, y=posterior_mean), size=1) +
+theme_bw()
+
+```
+
+# Metropolis Algorithm
+
+To generate sample s + 1 of a Metropolis MCMC sampler given (possibly) unnormalized density $p(\theta)$: 
+
+1. Propose a new sample $\theta_*$ given the old sample $\theta_s$ from a symmetric distribution $J(\theta_*|\theta_s)$
+2. If $p(\theta_*) > p(\theta_s)$, then set $\theta_{s + 1}$ equal to $\theta_*$ and go to the next iteration
+3. If $p(\theta_*) < p(\theta_s)$, then
+    a. Generate a random number r from uniform(0, 1)
+    b. If $r < \frac{p(\theta_*)}{p(\theta_s)}$, set $\theta_{s + 1}$ equal to $\theta_*$ and go to the next iteration
+    c. Otherwise set $\theta_{s + 1}$ equal to $\theta_s$
+    
+https://chi-feng.github.io/mcmc-demo/app.html
+
+
+
+
+

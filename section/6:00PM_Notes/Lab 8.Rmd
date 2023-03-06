@@ -1,0 +1,134 @@
+---
+title: "R Notebook"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+Last time (download packages)
+```{r}
+install.packages("cmdstanr", repos = c("https://mc-stan.org/r-packages/", getOption("repos")))
+install_cmdstan()
+library("rstan")
+library(cmdstanr)
+library(bayesplot)
+```
+
+
+#1) Stan: Gamma - Poisson Example
+
+Let
+-$\lambda$ represent the average test score by a group of students. 
+-$Y_i$ represent the observed test score by the $i$-th student. 
+Therefore, 
+\[
+Y_i | \lambda \sim Poi(\lambda)
+\]
+Assume $\lambda \sim Gamma(a,b)$ where $a = 2, b = .45$ 
+
+#1a) Find the posterior parameters a,b & posterior mean. 
+```{r}
+y = c(70,85, 50, 75, 93, 41)
+post_a = 2 + sum(y)
+post_b =.45 + lnegth(y)
+post_mu = post_a / post_b
+```
+
+#1b) Create stan file called test_scores.stan -> Encode Poisson-Gamma model in stan. 
+
+#1c) Together: use cmdstanr & find the posterior mean of the average test score (by finding the sample average of all Monte Carlo samples of lambda)
+```{r}
+stan_model1 = cmdstan_model("test_scores.stan")
+stan_fit1 = stan_model1$sample(data = list(Y=y), refresh = 0)
+
+MCMCsamples = stan_fit1$draws(format = "df")
+post_mean = mean(MCMCsamples$lambda)
+```
+
+
+
+#2) Stan: Linear Regression Model 
+
+A linear regression model: 
+  -Response variable: $Y_i$ is dependent on the variable $X_i$ as follows: $y_i = \beta x_i + \alpha + \epsilon_i$ &    $\epsilon_i \sim N(0, \sigma^2)$. 
+  
+  -Equivalently: $y_i \sim N(\beta x_i + \alpha, \sigma^2)$ 
+  
+#2a) Create a stan file called linear_reg_ex.stan -> encode the linear-regression model above in stan. Load it into enviroment. 
+```{r}
+stan_model2 = cmdstan_model("linear-reg.stan")
+x=runif(6,40,100)
+stan_fit2 = stan_model$sample(data = list(N=n,x=x,y=y),refresh = 0)
+```
+
+
+#2b) Find the estimates of the posterior means 
+```{r}
+#extract samples
+samples = stan_fit2$draws(format = "df")
+alpha_samples = samples$alpha 
+beta_samples = samples$beta 
+sigma_samples = samples$sigma 
+```
+
+#2c) Together: i) find the mean of samples above ii) compute get the posterior mean of y (using equ. above) at x = 5. 
+```{r}
+mean(beta_samples)
+mean(alpha_samples)
+mean(sigma_samples)
+
+y_hat <- alpha_samples + 5* beta_samples 
+mean(y_hat)
+```
+
+
+#2d) What's the relationship bw alpha & beta? 
+```{r}
+ggplot(tibble(alpha = alpha_samples, beta = beta_samples)) + geom_point(aes(x=alpha, y = beta)) + theme_bw()
+```
+
+#discuss the relationship. what do you obersve bw these two variables? 
+
+#4) Lastly, Code HW5 - how to compute CI. That is, making 60% and 90% confidence bands plot for y
+
+
+*Important Code for HW 5* 
+```{r}
+xgrid <- seq(0, 5, by=0.1)
+
+xgrid
+
+compute_curve <- function(sample) {
+  alpha <- sample[1]
+  beta <- sample[2]
+  y_values <- alpha + beta*xgrid
+}
+
+res <- apply(cbind(alpha_samples, beta_samples), 1, compute_curve)
+#each col of res is for a set of alpha,beta values
+#each row of res is different y values computed from different sets of alpha beta for a fixed x values.
+quantiles <- apply(res, 1, function(x) quantile(x, c(0.05, 0.20, 0.80, 0.95)))
+
+
+posterior_mean <- rowMeans(res)
+#posterior_med <- apply(res, 1, median)
+tibble(x=xgrid,
+       q05=quantiles[1, ],
+       q20=quantiles[2, ],
+       q80=quantiles[3, ],
+       q95=quantiles[4, ],
+       mean=posterior_mean) %>%
+  ggplot() +
+  geom_ribbon(aes(x=xgrid, ymin=q05, ymax=q95), alpha=0.2) +
+  geom_ribbon(aes(x=xgrid, ymin=q20, ymax=q80), alpha=0.5) +
+  geom_line(aes(x=xgrid, y=posterior_mean), size=1) +
+  theme_bw()
+
+```
+
+
+
+
+
+
+

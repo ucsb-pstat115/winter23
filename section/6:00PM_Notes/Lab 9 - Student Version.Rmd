@@ -1,0 +1,92 @@
+---
+title: "Lab 9 - Student Version"
+output: html_notebook
+---
+
+```{r, warning=FALSE, message=FALSE}
+library(coda)
+library(MASS)
+library(tidyverse)
+library(knitr)
+```
+
+
+#1) Metropolis Algorithm
+
+To generate sample s + 1 of a Metropolis MCMC sampler given (possibly) unnormalized density $p(\theta)$:
+
+1. 
+2. 
+3. 
+  a. Generate a random number $r$ from $U(0,1)$ 
+  b. If $r < \frac{p(\theta_^*)}{p(\theta_s)}$, set $\theta_{s+1}$ equal to $\theta_^*$. And go to the next iteration.
+  c. 
+
+#1a) Let's code the metropolis algorithm 
+
+#The distribution (we want to sample) comes from a normal RV 
+```{r}
+# pdf we want to sample
+p = function(theta) {
+  dnorm(theta, 1.0, 2.0)
+}
+```
+
+#Function should return (ideal) next state given current one theta_s
+```{r}
+metropolis = function(theta_s){
+  
+  theta_p = rnorm(1, theta_s, 1.0) #one observation from mean =, sd = 
+  
+   if(p(theta_p) > p(theta_s)){
+     
+   }
+  else{
+    #define r 
+    if(r < p(theta_p) / p(theta_s)){
+      
+    }
+    else{
+      
+    }
+  }
+}
+```
+
+#Try an example
+```{r}
+
+
+for(i in 1:(length(samples) - 1)) {
+ 
+}
+```
+
+#2) Metropolis Algorithm using Log-Scale 
+
+#2a) Motivation: Using the un-logged densities is numerically unstable.
+
+```{r}
+print(1e-200, format = "e", digits = 20)
+print(1e-400, format = "e", digits = 20)
+```
+Note: small probabilities come up often (it's important to evaluate them and not have the equal zero). 
+#2b) Remedy: log-scale. New algorithm: 
+
+1.
+2. If $\log p(\theta_*) > \log p(\theta_s)$, then set $\theta_{s + 1}$ equal to $\theta_*$ and go to the next iteration
+3. If $\log p(\theta_*) < \log p(\theta_s)$, then
+    a. Generate a random number r from uniform(0, 1)
+    b. If $\log(r) < \log p(\theta_*) - \log p(\theta_s)$, set $\theta_{s + 1}$ equal to $\theta_*$ and go to the next iteration
+    c. Otherwise set $\theta_{s + 1}$ equal to $\theta_s$
+
+#2c) Together: recode the metropoloiz hastings algorithm using log-scale (15 min)
+```{r}
+#pdf 
+logp = function(theta) {
+  dnorm(theta, 1.0, 2.0, log = TRUE)
+}
+
+
+```
+

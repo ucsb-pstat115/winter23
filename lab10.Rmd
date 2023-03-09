@@ -1,0 +1,364 @@
+---
+title: "Lab 9"
+author: "PSTAT 115, Winter 2023"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+urlcolor: blue
+---
+
+# This lab will focus on the following topics:
+
+* Applying the Metropolis algorithm to a linear model (Wheels Example)
+
+* Hierarchical Modeling (Eight Schools Example)
+
+```{r, warning=FALSE, message=FALSE}
+library(coda)
+library(MASS)
+library(tidyverse)
+library(ggplot2)
+library(knitr)
+knitr::opts_chunk$set(echo=TRUE, 
+                      cache=FALSE,
+                      message = FALSE,
+                      warning = FALSE,
+                      fig.width=5, 
+                      fig.height=5,
+                      fig.align='center',
+                      fig.pos = 'H')
+library(rstan)
+library(Rcpp)
+library(jpeg)
+```
+
+# Metropolis Algorithm
+
+To generate sample s + 1 of a Metropolis MCMC sampler given (possibly) unnormalized density $p(\theta)$: 
+
+1. Propose a new sample $\theta_*$ given the old sample $\theta_s$ from a symmetric distribution
+2. If $p(\theta_*) > p(\theta_s)$, then set $\theta_{s + 1}$ equal to $\theta_*$ and go to the next iteration
+3. If $p(\theta_*) < p(\theta_s)$, then
+    a. Generate a random number r from uniform(0, 1)
+    b. If $r < \frac{p(\theta_*)}{p(\theta_s)}$, set $\theta_{s + 1}$ equal to $\theta_*$ and go to the next iteration
+    c. Otherwise set $\theta_{s + 1}$ equal to $\theta_s$
+
+# Little wheels
+
+Assume you are given the following code and told to use it to sample from a normal distribution
+```{r, eval = FALSE}
+# pdf we want to sample
+p = function(theta) {
+  dnorm(theta, 1.0, 2.0)
+}
+
+metropolis = function(theta_s) {
+  # Function should return the next state
+  #   in the Markov chain given the current state, theta_s!
+  
+  theta_p = rnorm(1, theta_s, 1.0)
+  
+  if(p(theta_p) > p(theta_s)) {
+    return(theta_p)
+  } else {
+    r = runif(1)
+    if(r < p(theta_p) / p(theta_s)) {
+      return(theta_p)
+    } else {
+      return(theta_s)
+    }
+  }
+}
+
+N = 10000
+samples = rep(0, N)
+samples[1] = 10.0
+for(i in 1:(length(samples) - 1)) {
+  samples[i + 1] = metropolis(samples[i])
+}
+```
+
+
+We can look at our traceplots, effective sample size estimates, and acf plots with the coda package:
+```{r, eval = FALSE}
+plot(as.mcmc(samples))
+effectiveSize(samples)
+acf(samples)
+```
+
+# Medium wheels
+Using the un-logged densities is numerically unstable. As an example of what can happen, compare the outputs of:
+```{r, eval = FALSE}
+print(1.0e-100 * 1e-100, format = "e", digits = 20)
+print(1.0e-200 * 1e-200, format = "e", digits = 20)
+```
+
+It is really common to need to evaluate numbers this small in a probabilistic model. For instance, a term like $0.36^{300}$ might come up when evaluating a binomial pmf that models a basketball player's yearly shooting percentage. If we extend that to maybe three years worth of shots-made, ($0.36^{900}$), we'll see that evaluates to zero. The trick to avoid this is working on the log scale.
+
+We want our metropolis algorithm to work on a log scale too. Because log is a monotonic increasing function, we can just take the log of the conditions in steps 2 and 3 above and get our new algorithm:
+
+2. If $\log p(\theta_*) > \log p(\theta_s)$, then set $\theta_{s + 1}$ equal to $\theta_*$ and go to the next iteration
+3. If $\log p(\theta_*) < \log p(\theta_s)$, then
+    a. Generate a random number r from uniform(0, 1)
+    b. If $\log(r) < \log p(\theta_*) - \log p(\theta_s)$, set $\theta_{s + 1}$ equal to $\theta_*$ and go to the next iteration
+    c. Otherwise set $\theta_{s + 1}$ equal to $\theta_s$
+
+
+# Big wheels
+
+If you want to sample a multidimensional distribution. You can use the funciton mvrnorm to sample from a multivariate proposal distribution like so:
+
+```{r}
+library(MASS)
+mvrnorm(1, c(1.0, 2.0), matrix(c(1.0, 0.5, 0.5, 2.0), nrow = 2))
+```
+
+This is a sample from:
+$$
+N\left(\begin{bmatrix}
+    1 \\
+    2
+  \end{bmatrix}, \begin{bmatrix}
+    1 & 0.5 \\
+    0.5 & 2
+  \end{bmatrix}\right)
+$$
+  
+# Model and Simulated data
+
+Let us consider a model of the speed of cars and the distances taken to stop. Assuming the true model is
+
+$$dist = -8 + 3.5 * speed+ \epsilon, \text{ where }\epsilon \sim N(0, 15^2)$$
+And now we generate simulated data from the true model and try to estimate the parameters using the Bayesian approach.
+
+```{r}
+true_beta0 <- -8
+true_beta1 <- 3.5
+x          <- rep(seq(10, 32, by = 2), each = 2)
+set.seed(10)
+y          <- true_beta0 + true_beta1 * x + rnorm(length(x), 0, 15)
+
+data.frame(x = x, y = y) %>% ggplot() + geom_point(aes(x = x, y = y)) + 
+  xlab("Speed") + ylab("Distance") + ggtitle("Simulated Data from the True Model") + 
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Now we try to propose a simple linear model and estimate the parameters using Metroplis-Hastings algorithm. Our model is 
+$$dist = \beta_0 + \beta_1 * speed + \epsilon, \text{ where }\epsilon \sim N(0, 15^2).$$
+Notice that here we assume we know the variance for the error term, so we can focus on the estimation of $\beta_0$ and $\beta_1$.
+
+# Function for log_posterior
+From the lecture materials we know it is often more stable working with log-scale. So here we write a function for the log_posterior. You only need to consider the log for the essential parts in the posterior distribution.
+
+```{r}
+logp <- function(beta){
+  return(sum(dnorm(y - beta[1] - beta[2] * x, mean = 0, sd = 15, log = TRUE)))
+}
+```
+
+# Call our Metropolis sampler
+
+```{r, eval = FALSE}
+samples <- rw_metrop_multi(c(0, 0), 1000, 20000, cov = matrix(c(30.0, 0.0, 0.0, 1.0), nrow=2))
+```
+
+# Diagnose sampling
+
+```{r, eval = FALSE}
+plot(as.mcmc(samples))
+effectiveSize(samples)
+acf(samples)
+```
+
+# Histograms for the Posterior Samples 
+
+```{r, eval = FALSE, warning=FALSE, message=FALSE}
+qplot(samples[,2]) + geom_vline(xintercept = 3.5)
+```
+
+```{r, eval = FALSE, warning=FALSE, message=FALSE}
+qplot(samples[,1]) + geom_vline(xintercept = -8)
+```
+
+```{r, eval = FALSE}
+plot(samples[,1], samples[,2])
+```
+
+# Covariance Matrix for the Proposal Distribution
+
+We can actually play around with the covariance matrix in the proposal distribution. Negative correlation between $\beta_0$ and $\beta_1$ tend to provide better sampling results.
+
+# Posterior intervals
+
+Especially with a correlated posterior, it can be difficult to understand the implications of our uncertainty in our parameters direction. It is usually easier to compute functions of our posterior and see how the uncertainty in our parameters transfers to uncertainty in this quantity. In this case, we'll try to use plots to understand the uncertainty in the line of our linear regression.
+
+```{r, eval = FALSE}
+# Make up some hypothethical xs to plot at. Sometimes you use xs from your data from this, sometimes you make them up
+# You'll need to change this for the homework
+xgrid <- seq(10, 32, by = 0.5)
+
+# Compute the function we want to understand the uncertainty of (as a function of the different parameters).
+# You'll need to change this for the homework.
+compute_curve <- function(samp) {
+  beta_0 <- samp[1]
+  beta_1 <- samp[2]
+  beta_0 + beta_1 * xgrid
+}
+
+res <- apply(samples, 1, compute_curve)
+quantiles <- apply(res, 1, function(x) quantile(x, c(0.025, 0.25, 0.75, 0.975)))
+posterior_mean <- rowMeans(res)
+tibble(x=xgrid, q025=quantiles[1, ], q25=quantiles[2, ],
+       q75=quantiles[3,], q975=quantiles[4, ], mean=posterior_mean) %>% ggplot() + 
+  geom_ribbon(aes(x=xgrid, ymin=q025, ymax=q975), alpha=0.2) + 
+  geom_ribbon(aes(x=xgrid, ymin=q25, ymax=q75), alpha=0.5) + 
+  geom_line(aes(x=xgrid, y=posterior_mean), size=1) 
+
+  # geom_vline(xintercept = mean(-samples[, 1]/samples[, 2]), linetype="dashed") +
+  # geom_hline(yintercept = 0.5, linetype="dashed")
+
+
+```
+
+
+With the data points on.
+```{r, eval = FALSE}
+ggplot(tibble(x=xgrid, q025=quantiles[1, ], q25=quantiles[2, ], 
+              q75=quantiles[3,], q975=quantiles[4, ],mean=posterior_mean)) +
+  geom_ribbon(aes(x=xgrid, ymin=q025, ymax=q975), alpha=0.2) + 
+  geom_ribbon(aes(x=xgrid, ymin=q25, ymax=q75), alpha=0.5) + 
+  geom_line(aes(x=xgrid, y=posterior_mean), size=1) + 
+  geom_point(data =data.frame(x= x, y = y) , aes(x= x, y = y), col = "blue")
+```
+
+
+# Hierarchical Modeling (Eight Schools Example)
+
+```{r, echo=FALSE, out.width = '80%'}
+include_graphics("lab10/8schools1.JPG")
+```
+
+```{r, echo=FALSE, out.width = '80%'}
+include_graphics("lab10/8schools2.JPG")
+```
+
+**Model Specification:**
+
+$$\theta_j \sim N(\mu, \tau^2)$$
+$$y_j \sim N(\theta_j, \sigma_j^2)$$
+
+- $\theta_j$ are the true unknown effects of the program in school j
+
+- $y_j$ is the observed effects of the program in school j
+
+- Add a shared normal prior distribution to $\theta_j$
+
+- Assume the global mean, $\mu$ is also unknown
+
+- $\tau^2$ determines how much weight weight we put on the independent estimate vs the pooled estimate
+
+```{r, echo=FALSE, out.width = '80%'}
+include_graphics("lab10/8schools3.JPG")
+```
+
+```{r}
+## data ##
+schools_dat <- list(J = 8, 
+                    y = c(28,  8, -3,  7, -1,  1, 18, 12),
+                    sigma = c(15, 10, 16, 11,  9, 11, 10, 18))
+```
+
+
+Estimate hyperparameter $\mu$ and $\tau$
+ ```{r, eval=FALSE}
+data {
+   int<lower=0> J;          // # of schools
+   real y[J];               // estimated treatment
+   real<lower=0> sigma[J];  // std err of effect
+}
+
+parameters {
+  real theta[J];        // school effect
+  real mu;              // mean for schools
+  real<lower=0> tau;    // variance between schools
+}
+
+model {
+  theta ~ normal(mu, tau);
+  y ~ normal(theta, sigma);
+}
+```
+Further, introduce $\eta$, the unscaled deviation from $\mu$ by school and let:
+$$\theta_j = \mu + \tau * \eta_j,$$
+where $\eta_j \sim N(0, 1)$
+
+Noting that $$\theta_j \mid \mu, \tau \sim N(\mu, \tau^2)$$
+
+ ```{r, eval = FALSE}
+//saved as 8schools.stan
+data {
+  int<lower=0> J;         // number of schools 
+  real y[J];              // estimated treatment effects
+  real<lower=0> sigma[J]; // standard error of effect estimates 
+}
+parameters {
+  real mu;                // population treatment effect
+  real<lower=0> tau;      // standard deviation in treatment effects
+  vector[J] eta;          // unscaled deviation from mu by school
+}
+transformed parameters {
+  vector[J] theta = mu + tau * eta;        // school treatment effects
+}
+model {
+  target += normal_lpdf(eta | 0, 1);       // prior log-density
+  target += normal_lpdf(y | theta, sigma); // log-likelihood
+}
+```
+
+```{r, cache = TRUE}
+library(cmdstanr)
+install_cmdstan()
+stan_model <- cmdstan_model("lab10/eight_schools.stan")
+stan_fit <- stan_model$sample(
+    data = schools_dat,
+    refresh = 0, show_messages=FALSE)
+samples <- stan_fit$draws(format = "df")
+```
+
+```{r, include=FALSE}
+shrinkage_plot <- function(empirical, posterior_mean,
+                           shrink_point=mean(posterior_mean)) {
+  
+  tibble(y=empirical, pm=posterior_mean) %>% 
+    ggplot() + 
+    geom_segment(aes(x=y, xend=pm, y=1, yend=0), linetype="dashed") + 
+    geom_point(aes(x=y, y=1)) + 
+    geom_point(aes(x=pm, y=0)) + 
+    theme_bw(base_size=14) + 
+    geom_vline(xintercept=shrink_point, color="blue", size=1.2) + 
+    ylab("") + xlab("Estimate") + 
+    scale_y_continuous(breaks=c(0, 1), 
+                       labels=c("Posterior Mean", "MLE"), 
+                       limits=c(0,1))
+}
+```
+
+
+```{r}
+theta_post <- colMeans(samples[c(12:19)])
+
+# shrinkage plot #
+shrinkage_plot(schools_dat$y, theta_post)
+```
+
+The overall average school effect, $\mu$, is also random.  Here is a histogram of the posterior distribution:
+
+```{r}
+# histogram for mu #
+mu_post = tibble(mu = samples$mu)
+ggplot(mu_post, aes(mu)) + 
+  geom_histogram() + 
+  theme_bw(base_size = 16) + 
+  labs(x = expression(mu))
+```

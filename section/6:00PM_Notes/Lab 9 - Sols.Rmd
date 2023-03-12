@@ -1,0 +1,119 @@
+---
+title: "Lab 9 - Student Version"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+```{r, warning=FALSE, message=FALSE}
+library(coda)
+library(MASS)
+library(tidyverse)
+library(knitr)
+```
+
+
+#1) Metropolis Algorithm
+
+To generate sample s + 1 of a Metropolis MCMC sampler given (possibly) unnormalized density $p(\theta)$:
+
+1. Propose a new sample $\theta_*$ given the old sample $\theta_s$ from a symmetric distribution $J(\theta_*|\theta_s)$
+2. If $p(\theta_*) > p(\theta_s)$, then set $\theta_{s + 1}$ equal to $\theta_*$ and go to the next iteration
+3. If $p(\theta_*) < p(\theta_s)$, then
+  a. Generate a random number $r$ from $U(0,1)$ 
+  b. If $r < \frac{p(\theta_^*)}{p(\theta_s)}$, set $\theta_{s+1}$ equal to $\theta_^*$. And go to the next iteration.
+  c. Otherwise set $\theta_{s + 1}$ equal to $\theta_s$
+
+#1a) Let's code the metropolis algorithm 
+
+#The distribution (we want to sample) comes from a normal RV 
+```{r}
+# pdf we want to sample
+p = function(theta) {
+  dnorm(theta, 1.0, 2.0)
+}
+```
+
+#Function should return (ideal) next state given current one theta_s
+```{r}
+metropolis = function(theta_s){
+  
+  theta_p = rnorm(1, theta_s, 1.0) #one observation from mean =, sd = 
+  
+   if(p(theta_p) > p(theta_s)){
+     return(theta_p)
+   }
+  else{
+    r = runif(1) #define r 
+    if(r < p(theta_p) / p(theta_s)){
+      return(theta_p)
+    }
+    else{
+      return(theta_s)
+    }
+  }
+}
+```
+
+#Try an example
+```{r}
+set.seed(115)
+N = 10000
+samples = rep(0, N)
+samples[1] = 10.0 #initialing first parameter 
+for(i in 1:(length(samples) - 1)) {
+  samples[i + 1] = metropolis(samples[i])
+}
+```
+
+#2) Metropolis Algorithm using Log-Scale 
+
+#2a) Motivation: Using the un-logged densities is numerically unstable.
+
+```{r}
+print(1e-200, format = "e", digits = 20)
+print(1e-400, format = "e", digits = 20)
+```
+Note: small probabilities come up often (it's important to evaluate them and not have the equal zero). 
+#2b) Remedy: log-scale. New algorithm: 
+
+1. Propose a new sample $\theta_*$ given the old sample $\theta_s$ from a symmetric distribution $J(\theta_*|\theta_s)$
+2. If $\log p(\theta_*) > \log p(\theta_s)$, then set $\theta_{s + 1}$ equal to $\theta_*$ and go to the next iteration
+3. If $\log p(\theta_*) < \log p(\theta_s)$, then
+    a. Generate a random number r from uniform(0, 1)
+    b. If $\log(r) < \log p(\theta_*) - \log p(\theta_s)$, set $\theta_{s + 1}$ equal to $\theta_*$ and go to the next iteration
+    c. Otherwise set $\theta_{s + 1}$ equal to $\theta_s$
+
+#2c) Together: recode the metropoloiz hastings algorithm using log-scale (15 min)
+```{r}
+#pdf 
+logp = function(theta) {
+  dnorm(theta, 1.0, 2.0, log = TRUE)
+}
+
+metropolis = function(theta_s) {
+  theta_p = rnorm(1, theta_s, 1.0)
+  
+  if(logp(theta_p) > logp(theta_s)) {
+    return(theta_p)
+  } else {
+    r = runif(1)
+    if(log(r) < logp(theta_p) - logp(theta_s)) {
+      return(theta_p)
+    } else {
+      return(theta_s)
+    }
+  }
+}
+
+
+set.seed(115)
+N = 10000
+samples = rep(0, N)
+samples[1] = 100.0
+for(i in 1:(length(samples) - 1)) {
+  samples[i + 1] = metropolis(samples[i])
+}
+samples 
+```
+
